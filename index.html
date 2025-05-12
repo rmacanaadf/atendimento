@@ -105,8 +105,19 @@
             mensagemDiv.appendChild(novaMensagem);
         }
 
-        const fila = [];
-        const historicoAtendimento = [];
+        // Função para obter dados do LocalStorage
+        function obterDadosLocalStorage(chave) {
+            const dados = localStorage.getItem(chave);
+            return dados ? JSON.parse(dados) : [];
+        }
+
+        // Função para salvar dados no LocalStorage
+        function salvarDadosLocalStorage(chave, dados) {
+            localStorage.setItem(chave, JSON.stringify(dados));
+        }
+
+        const fila = obterDadosLocalStorage('fila');
+        const historicoAtendimento = obterDadosLocalStorage('historicoAtendimento');
         const nomeInput = document.getElementById('nome');
         const tipoInput = document.getElementById('tipo');
         const listaFilaUl = document.getElementById('lista-fila-ul');
@@ -162,9 +173,10 @@
             const dataEntrada = agora.toLocaleDateString();
             const horaEntrada = agora.toLocaleTimeString();
             fila.push({ nome, tipo, dataEntrada, horaEntrada, atendente: '' });
+            salvarDadosLocalStorage('fila', fila); // Salva no LocalStorage
             exibirMensagem('sucesso', `${nome}, você entrou na fila para ${tipo} em ${dataEntrada} às ${horaEntrada}!`);
             nomeInput.value = '';
-            atualizarListaFila(); // Atualiza a lista automaticamente ao entrar na fila
+            atualizarListaFila();
         });
 
         function atualizarListaFila() {
@@ -196,7 +208,6 @@
             }
             fila[index].atendente = nomeAtendente;
             const pessoaAtendida = fila.splice(index, 1)[0];
-
             // Adiciona ao histórico de atendimento
             const atendimento = {
                 nome: pessoaAtendida.nome,
@@ -210,26 +221,28 @@
                 tempoAtendimento: ''
             };
             historicoAtendimento.push(atendimento);
+            salvarDadosLocalStorage('historicoAtendimento', historicoAtendimento); // Salva o histórico
+            salvarDadosLocalStorage('fila', fila); // Salva a fila atualizada
             exibirMensagem('sucesso', `Chamando ${pessoaAtendida.nome} para atendimento.`);
             atualizarHistoricoAtendimento();
-            atualizarListaFila(); // Atualiza a lista após atender alguém
+            atualizarListaFila();
         }
 
         function atualizarHistoricoAtendimento() {
             historicoAtendimentoUl.innerHTML = '';
-            historicoAtendimento.forEach((atendimento, index) => { // Adicionei o index aqui
+            historicoAtendimento.forEach((atendimento, index) => {
                 const li = document.createElement('li');
                 li.className = 'bg-gray-50 rounded-md shadow-sm py-2 px-3 flex justify-between items-center';
                 let finalizarButton = '';
                 let apagarButton = '';
-                if (atendimento.atendente !== '' && atendimento.horaFinalizacao === '') { // Verifique se o atendente foi preenchido e o atendimento não foi finalizado
-                    finalizarButton = `<button id="finalizar-atendimento-${index}" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline text-sm ml-2" onclick="finalizarAtendimento(${index})">Finalizar Atendimento</button>`; // Botão de finalizar atendimento
+                if (atendimento.atendente !== '' && atendimento.horaFinalizacao === '') {
+                    finalizarButton = `<button id="finalizar-atendimento-${index}" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline text-sm ml-2" onclick="finalizarAtendimento(${index})">Finalizar Atendimento</button>`;
                 }
-                if (atendimento.atendente !== '') { // Verifique se o atendente foi preenchido
-                    apagarButton = `<button id="apagar-historico-${index}" class="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline text-sm" onclick="apagarHistorico(${index})">Apagar</button>`; // Botão de apagar
+                if (atendimento.atendente !== '') {
+                    apagarButton = `<button id="apagar-historico-${index}" class="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline text-sm" onclick="apagarHistorico(${index})">Apagar</button>`;
                 }
                 li.innerHTML = `<span class="text-gray-800">${atendimento.nome} - ${atendimento.tipo} - Entrada: ${atendimento.dataEntrada} ${atendimento.horaEntrada} - Atendente: ${atendimento.atendente} - Atendimento: ${atendimento.dataAtendimento} ${atendimento.horaAtendimento} ${atendimento.horaFinalizacao ? '- Finalizado: ' + atendimento.horaFinalizacao : ''} ${atendimento.tempoAtendimento ? '- Tempo: ' + atendimento.tempoAtendimento : ''}</span>
-                               ${finalizarButton} ${apagarButton}`; // Adiciona o botão à linha
+                               ${finalizarButton} ${apagarButton}`;
                 historicoAtendimentoUl.appendChild(li);
             });
         }
@@ -237,31 +250,32 @@
         function finalizarAtendimento(index) {
             const agora = new Date();
             historicoAtendimento[index].horaFinalizacao = agora.toLocaleTimeString();
-
             // Calcula o tempo de atendimento
             const dataHoraInicio = new Date(historicoAtendimento[index].dataAtendimento + ' ' + historicoAtendimento[index].horaAtendimento);
             const dataHoraFim = new Date(historicoAtendimento[index].dataAtendimento + ' ' + historicoAtendimento[index].horaFinalizacao);
             const diff = dataHoraFim.getTime() - dataHoraInicio.getTime();
-            const diffMinutes = Math.round(diff / 60000); // Converte de milissegundos para minutos
-
+            const diffMinutes = Math.round(diff / 60000);
             historicoAtendimento[index].tempoAtendimento = diffMinutes + ' minutos';
-            atualizarHistoricoAtendimento(); // Atualiza a lista na tela
+            salvarDadosLocalStorage('historicoAtendimento', historicoAtendimento); // Salva o histórico atualizado
+            atualizarHistoricoAtendimento();
             exibirMensagem('sucesso', 'Atendimento finalizado com sucesso!');
         }
 
-        function apagarHistorico(index) { // Função para apagar o histórico
+        function apagarHistorico(index) {
             const confirmacao = confirm("Deseja apagar este registro do histórico de atendimento?");
             if (confirmacao) {
-                historicoAtendimento.splice(index, 1); // Remove o registro do array
-                atualizarHistoricoAtendimento(); // Atualiza a lista na tela
+                historicoAtendimento.splice(index, 1);
+                salvarDadosLocalStorage('historicoAtendimento', historicoAtendimento); // Salva o histórico atualizado
+                atualizarHistoricoAtendimento();
                 exibirMensagem('sucesso', 'Registro apagado do histórico com sucesso!');
             } else {
                 exibirMensagem('alerta', 'Operação de apagar registro cancelada.');
             }
         }
 
-        // Atualiza a lista de fila inicial
+        // Atualiza a lista de fila e histórico iniciais
         atualizarListaFila();
+        atualizarHistoricoAtendimento();
     </script>
 </body>
 </html>
