@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Fila Lovable</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@tailwindcss/browser@latest"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        /* Estilos personalizados para o sistema de fila */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .mensagem-alerta {
+            background-color: #f0fdf4;
+            color: #15803d;
+            border-left: 4px solid #16a34a;
+            padding: 16px;
+            margin-bottom: 24px;
+            border-radius: 6px;
+            animation: fadeIn 0.5s ease-out, slideIn 0.5s ease-out;
+        }
+        .mensagem-erro {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+            padding: 16px;
+            margin-bottom: 24px;
+            border-radius: 6px;
+            animation: fadeIn 0.5s ease-out, slideIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+        #tempo-espera {
+            display: none;
+        }
+        #creditos {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            font-size: 0.7rem;
+            color: #777;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md transition-transform hover:scale-105">
+        <h1 class="text-2xl font-semibold text-blue-600 mb-6 text-center">Sistema de Fila</h1>
+        <div id="mensagem" class="mb-6 text-center">
+            </div>
+        <div id="fila">
+            <div class="mb-4">
+                <label for="nome" class="block text-gray-700 text-sm font-bold mb-2">Nome:</label>
+                <input type="text" id="nome" placeholder="Digite seu nome" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="mb-6">
+                <label for="tipo" class="block text-gray-700 text-sm font-bold mb-2">Tipo de Serviço:</label>
+                <select id="tipo" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    <option value="pegar-material">Pegar Material</option>
+                    <option value="devolver-equipamento">Devolver Equipamento</option>
+                </select>
+            </div>
+            <div class="flex flex-col space-y-3">
+                <button id="entrar-fila" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition duration-300 ease-in-out">Entrar na Fila</button>
+                <button id="baixar-excel" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition duration-300 ease-in-out">Baixar Excel</button>
+            </div>
+        </div>
+        <div id="lista-fila" class="mt-8">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4 text-center">Pessoas na Fila:</h2>
+            <ul id="lista-fila-ul" class="space-y-2">
+                </ul>
+        </div>
+        <div id="historico-atendimento" class="mt-8">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4 text-center">Histórico de Atendimento:</h2>
+            <ul id="historico-atendimento-ul" class="space-y-2">
+                </ul>
+        </div>
+    </div>
+    <div id="creditos">
+        Developed by Mauricio Santana
+    </div>
+    <script>
+        // Função para exibir mensagens de alerta e erro
+        function exibirMensagem(tipo, mensagem) {
+            const mensagemDiv = document.getElementById('mensagem');
+            mensagemDiv.innerHTML = '';
+            const novaMensagem = document.createElement('div');
+            novaMensagem.className = tipo === 'sucesso' ? 'mensagem-alerta' : 'mensagem-erro';
+            novaMensagem.textContent = mensagem;
+            mensagemDiv.appendChild(novaMensagem);
+        }
+
+        const fila = [];
+        const historicoAtendimento = [];
+        const nomeInput = document.getElementById('nome');
+        const tipoInput = document.getElementById('tipo');
+        const listaFilaUl = document.getElementById('lista-fila-ul');
+        const historicoAtendimentoUl = document.getElementById('historico-atendimento-ul');
+        const baixarExcelBtn = document.getElementById('baixar-excel');
+
+        // Função para gerar e baixar o arquivo Excel
+        function gerarExcel(data, nomeArquivo = 'dados_fila.xlsx') {
+            if (!data || data.length === 0) {
+                exibirMensagem('alerta', 'Não há dados para exportar.');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            const wsData = [
+                ["Nome", "Tipo de Serviço", "Data de Entrada", "Hora de Entrada", "Atendente", "Data de Atendimento", "Hora de Atendimento", "Hora de Finalização", "Tempo de Atendimento"],
+                ...data.map(item => [
+                    item.nome,
+                    item.tipo,
+                    item.dataEntrada,
+                    item.horaEntrada,
+                    item.atendente,
+                    item.dataAtendimento,
+                    item.horaAtendimento,
+                    item.horaFinalizacao,
+                    item.tempoAtendimento
+                ])
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            XLSX.utils.book_append_sheet(wb, ws, "Dados");
+            XLSX.writeFile(wb, nomeArquivo);
+        }
+
+        // Evento de clique do botão "Baixar Excel"
+        baixarExcelBtn.addEventListener('click', () => {
+            if (fila.length === 0 && historicoAtendimento.length === 0) {
+                exibirMensagem('alerta', 'Não há dados para exportar.');
+                return;
+            }
+            const dadosParaExcel = [...fila, ...historicoAtendimento];
+            gerarExcel(dadosParaExcel);
+        });
+
+        document.getElementById('entrar-fila').addEventListener('click', () => {
+            const nome = nomeInput.value.trim();
+            const tipo = tipoInput.value;
+            if (nome === '') {
+                exibirMensagem('erro', 'Por favor, preencha seu nome.');
+                return;
+            }
+            // Removido a verificação de nome duplicado
+            const agora = new Date();
+            const dataEntrada = agora.toLocaleDateString();
+            const horaEntrada = agora.toLocaleTimeString();
+            fila.push({ nome, tipo, dataEntrada, horaEntrada, atendente: '' });
+            exibirMensagem('sucesso', `${nome}, você entrou na fila para ${tipo} em ${dataEntrada} às ${horaEntrada}!`);
+            nomeInput.value = '';
+            atualizarListaFila(); // Atualiza a lista automaticamente ao entrar na fila
+        });
+
+        function atualizarListaFila() {
+            if (fila.length === 0) {
+                listaFilaUl.innerHTML = '';
+                return;
+            }
+            listaFilaUl.innerHTML = '';
+            fila.forEach((pessoa, index) => {
+                const li = document.createElement('li');
+                li.className = 'bg-gray-50 rounded-md shadow-sm py-2 px-3 flex justify-between items-center';
+                li.innerHTML = `<span class="text-gray-800">${index + 1}. ${pessoa.nome} - ${pessoa.tipo} - Entrada: ${pessoa.dataEntrada} ${pessoa.horaEntrada}</span>
+                               <input type="text" id="atendente-${index}" placeholder="Atendente" value="${pessoa.atendente}" class="w-32 ml-2 shadow appearance-none border rounded py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                               <button id="atender-${index}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline text-sm" onclick="atenderPessoa(${index})">Atender</button>`;
+                listaFilaUl.appendChild(li);
+            });
+        }
+
+        document.getElementById('consultar-fila').addEventListener('click', () => {
+            atualizarListaFila();
+        });
+
+        function atenderPessoa(index) {
+            const atendenteInput = document.getElementById(`atendente-${index}`);
+            const nomeAtendente = atendenteInput.value.trim();
+            if (nomeAtendente === "") {
+                exibirMensagem('erro', 'Por favor, preencha o nome do atendente.');
+                return;
+            }
+            fila[index].atendente = nomeAtendente;
+            const pessoaAtendida = fila.splice(index, 1)[0];
+
+            // Adiciona ao histórico de atendimento
+            const atendimento = {
+                nome: pessoaAtendida.nome,
+                tipo: pessoaAtendida.tipo,
+                dataEntrada: pessoaAtendida.dataEntrada,
+                horaEntrada: pessoaAtendida.horaEntrada,
+                atendente: nomeAtendente,
+                dataAtendimento: new Date().toLocaleDateString(),
+                horaAtendimento: new Date().toLocaleTimeString(),
+                horaFinalizacao: '',
+                tempoAtendimento: ''
+            };
+            historicoAtendimento.push(atendimento);
+            exibirMensagem('sucesso', `Chamando ${pessoaAtendida.nome} para atendimento.`);
+            atualizarHistoricoAtendimento();
+            atualizarListaFila(); // Atualiza a lista após atender alguém
+        }
+
+        function atualizarHistoricoAtendimento() {
+            historicoAtendimentoUl.innerHTML = '';
+            historicoAtendimento.forEach((atendimento, index) => { // Adicionei o index aqui
+                const li = document.createElement('li');
+                li.className = 'bg-gray-50 rounded-md shadow-sm py-2 px-3 flex justify-between items-center';
+                let finalizarButton = '';
+                let apagarButton = '';
+                if (atendimento.atendente !== '' && atendimento.horaFinalizacao === '') { // Verifique se o atendente foi preenchido e o atendimento não foi finalizado
+                    finalizarButton = `<button id="finalizar-atendimento-${index}" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline text-sm ml-2" onclick="finalizarAtendimento(${index})">Finalizar Atendimento</button>`; // Botão de finalizar atendimento
+                }
+                if (atendimento.atendente !== '') { // Verifique se o atendente foi preenchido
+                    apagarButton = `<button id="apagar-historico-${index}" class="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline text-sm" onclick="apagarHistorico(${index})">Apagar</button>`; // Botão de apagar
+                }
+                li.innerHTML = `<span class="text-gray-800">${atendimento.nome} - ${atendimento.tipo} - Entrada: ${atendimento.dataEntrada} ${atendimento.horaEntrada} - Atendente: ${atendimento.atendente} - Atendimento: ${atendimento.dataAtendimento} ${atendimento.horaAtendimento} ${atendimento.horaFinalizacao ? '- Finalizado: ' + atendimento.horaFinalizacao : ''} ${atendimento.tempoAtendimento ? '- Tempo: ' + atendimento.tempoAtendimento : ''}</span>
+                               ${finalizarButton} ${apagarButton}`; // Adiciona o botão à linha
+                historicoAtendimentoUl.appendChild(li);
+            });
+        }
+
+        function finalizarAtendimento(index) {
+            const agora = new Date();
+            historicoAtendimento[index].horaFinalizacao = agora.toLocaleTimeString();
+
+            // Calcula o tempo de atendimento
+            const dataHoraInicio = new Date(historicoAtendimento[index].dataAtendimento + ' ' + historicoAtendimento[index].horaAtendimento);
+            const dataHoraFim = new Date(historicoAtendimento[index].dataAtendimento + ' ' + historicoAtendimento[index].horaFinalizacao);
+            const diff = dataHoraFim.getTime() - dataHoraInicio.getTime();
+            const diffMinutes = Math.round(diff / 60000); // Converte de milissegundos para minutos
+
+            historicoAtendimento[index].tempoAtendimento = diffMinutes + ' minutos';
+            atualizarHistoricoAtendimento(); // Atualiza a lista na tela
+            exibirMensagem('sucesso', 'Atendimento finalizado com sucesso!');
+        }
+
+        function apagarHistorico(index) { // Função para apagar o histórico
+            const confirmacao = confirm("Deseja apagar este registro do histórico de atendimento?");
+            if (confirmacao) {
+                historicoAtendimento.splice(index, 1); // Remove o registro do array
+                atualizarHistoricoAtendimento(); // Atualiza a lista na tela
+                exibirMensagem('sucesso', 'Registro apagado do histórico com sucesso!');
+            } else {
+                exibirMensagem('alerta', 'Operação de apagar registro cancelada.');
+            }
+        }
+
+        // Atualiza a lista de fila inicial
+        atualizarListaFila();
+    </script>
+</body>
+</html>
